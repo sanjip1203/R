@@ -14,6 +14,10 @@ library(reshape2)
 library(ggcorrplot)
 library(corrplot)
 library(lattice)
+library(rpart)
+library(randomForest)
+library(glmnet)
+
 
 # Load the data
 credit_data <- read.csv("/Users/sandipmahata/Desktop/statistical referencing and modeling/group project/credit_data.csv")
@@ -193,10 +197,96 @@ ggplot(credit_data, aes(x = Occupation, y = Profile.Score)) +
 
 
 
-#machine learning and deeplearning process
+#machine learning
 #Linear Regression
 lm_model <- lm(Credit.Score ~ ., data = credit_data)
 summary(lm_model)
 
+
+# Check the structure and summary of the data
+str(credit_data)
+summary(credit_data)
+
+# Check for duplicates and missing values
+duplicates <- sum(duplicated(credit_data))
+missing_values <- colSums(is.na(credit_data))
+cat("Duplicates: ", duplicates, "\n")
+cat("Missing Values:\n")
+print(missing_values)
+
+# Impute missing values for Occupation where Employment Profile is "Unemployed"
+credit_data$Occupation[credit_data$"Employment Profile" == "Unemployed" & is.na(credit_data$Occupation)] <- "None"
+
+# Impute remaining missing values in Occupation with a placeholder (e.g., "Unknown")
+credit_data$Occupation[is.na(credit_data$Occupation)] <- "Unknown"
+
+# Convert 'Number of Existing Loans' to factor
+credit_data$Number.of.Existing.Loans <- as.factor(credit_data$Number.of.Existing.Loans)
+
+# Confirm there are no more missing values
+missing_values <- colSums(is.na(credit_data))
+cat("Missing Values After Imputation:\n")
+print(missing_values)
+
+# Set a seed for reproducibility
+set.seed(123)
+
+# Split the data into training and testing sets manually
+sample_size <- floor(0.8 * nrow(credit_data))
+train_indices <- sample(seq_len(nrow(credit_data)), size = sample_size)
+train_data <- credit_data[train_indices, ]
+test_data <- credit_data[-train_indices, ]
+
+# Prepare the data for modeling
+train_x <- model.matrix(Credit.Score ~ .-1, data = train_data)
+train_y <- train_data$Credit.Score
+test_x <- model.matrix(Credit.Score ~ .-1, data = test_data)
+test_y <- test_data$Credit.Score
+
+# Ridge Regression using cross-validation
+ridge_model <- cv.glmnet(train_x, train_y, alpha = 0, standardize = TRUE)
+
+# Predict using the fitted ridge model
+ridge_pred <- predict(ridge_model, s = "lambda.min", newx = test_x)
+
+# Calculate RMSE
+ridge_rmse <- sqrt(mean((ridge_pred - test_y)^2))
+cat("Ridge Regression RMSE: ", ridge_rmse, "\n")
+
+# Optionally, you can plot the cross-validation results
+plot(ridge_model)
+
+# Lasso Regression using cross-validation
+lasso_model <- cv.glmnet(train_x, train_y, alpha = 1, standardize = TRUE)
+
+# Predict using the fitted lasso model
+lasso_pred <- predict(lasso_model, s = "lambda.min", newx = test_x)
+
+# Calculate RMSE for Lasso Regression
+lasso_rmse <- sqrt(mean((lasso_pred - test_y)^2))
+cat("Lasso Regression RMSE: ", lasso_rmse, "\n")
+
+# Plot the cross-validation results for Lasso Regression
+plot(lasso_model)
+
+# Ensure rpart package is loaded for Decision Trees
+if (!requireNamespace("rpart", quietly = TRUE)) {
+  install.packages("rpart")
+}
+library(rpart)
+
+# Decision Trees
+tree_model <- rpart(Credit.Score ~ ., data = train_data, method = "anova")
+
+# Predict using the decision tree model
+tree_pred <- predict(tree_model, newdata = test_data)
+
+# Calculate RMSE for Decision Trees
+tree_rmse <- sqrt(mean((tree_pred - test_y)^2))
+cat("Decision Tree RMSE: ", tree_rmse, "\n")
+
+# Plot the decision tree (optional, for visualization)
+plot(tree_model)
+text(tree_model)
 
 
